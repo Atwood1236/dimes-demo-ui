@@ -70,6 +70,14 @@ export function PositionCard({
 
   const positionValueUsd = parseFloat(position.current.positionValueUsd)
 
+  const openedAtLabel = position.entry.openedAt
+    ? new Date(position.entry.openedAt).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null
+
   return (
     <CardShell
       variant="yellow"
@@ -77,6 +85,19 @@ export function PositionCard({
       style={isSelected ? { border: '1px solid var(--yellow-border)' } : undefined}
     >
       <div style={{ position: 'relative', zIndex: 1, padding: '22px 24px 20px' }}>
+        {openedAtLabel && (
+          <div
+            style={{
+              fontSize: 10,
+              color: 'var(--text-dim)',
+              marginBottom: 12,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Opened {openedAtLabel}
+          </div>
+        )}
         {isVoided && (
           <div
             style={{
@@ -139,10 +160,10 @@ export function PositionCard({
                 {isUnwindingPosition
                   ? 'Deleveraging in progress…'
                   : isClosingPosition
-                  ? 'Awaiting on-chain confirmation on Polygon…'
+                  ? 'Awaiting onchain confirmation on Polygon…'
                   : isSettlingPosition
-                  ? 'Market resolved — awaiting on-chain settlement…'
-                  : 'Awaiting on-chain confirmation on Polygon…'}
+                  ? 'Market resolved — awaiting onchain settlement…'
+                  : 'Awaiting onchain confirmation on Polygon…'}
               </div>
             </div>
             <div
@@ -286,6 +307,10 @@ export function PositionCard({
             label={isVoided ? 'Settlement price' : 'Current price'}
             value={`$${position.current.markPriceUsd}`}
             valueColor={isVoided ? '#A78BFA' : undefined}
+          />
+          <MicroStat
+            label="Collateral"
+            value={`$${parseFloat(position.current.collateralUsd).toFixed(2)}`}
           />
           <MicroStat
             label="Current notional"

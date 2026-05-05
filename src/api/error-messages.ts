@@ -106,7 +106,7 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
 
   // ─── Cancel position ───────────────────────────────────────────────────
   cancel_position_delay_not_elapsed: 'Cancel delay has not elapsed yet. Try again shortly.',
-  cancel_position_transaction_failed: 'Cancel transaction failed on-chain.',
+  cancel_position_transaction_failed: 'Cancel transaction failed onchain.',
   cancel_position_not_found: 'Position not found.',
   cancel_position_not_in_created_state: 'This position can only be cancelled before it has filled.',
   cancel_position_not_on_polygon: 'Cancel is only supported for Polygon positions.',
@@ -123,7 +123,7 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
   customer_position_not_found: 'Position not found.',
 
   // ─── Close-early ───────────────────────────────────────────────────────
-  close_position_transaction_failed: 'Close transaction failed on-chain.',
+  close_position_transaction_failed: 'Close transaction failed onchain.',
   close_position_transaction_not_found: 'Close transaction not found.',
   finalize_close_transaction_failed: 'Finalising the close transaction failed.',
   close_no_open_position_transaction: 'No open transaction found for this position.',
@@ -156,7 +156,7 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
 
   // ─── Force-unwind ──────────────────────────────────────────────────────
   finalize_force_unwind_transaction_failed: 'Finalising the force-unwind transaction failed.',
-  force_unwind_transaction_failed: 'Force-unwind transaction failed on-chain.',
+  force_unwind_transaction_failed: 'Force-unwind transaction failed onchain.',
   force_unwind_transaction_not_found: 'Force-unwind transaction not found.',
   force_unwind_polymarket_order_failed: 'Polymarket force-unwind order failed.',
   force_unwind_polymarket_order_retry_failed: 'Polymarket force-unwind order failed after retries.',
@@ -169,7 +169,7 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
 
   // ─── Liquidate ─────────────────────────────────────────────────────────
   finalize_liquidation_transaction_failed: 'Finalising the liquidation transaction failed.',
-  liquidation_transaction_failed: 'Liquidation transaction failed on-chain.',
+  liquidation_transaction_failed: 'Liquidation transaction failed onchain.',
   liquidation_transaction_not_found: 'Liquidation transaction not found.',
   liquidate_polymarket_order_failed: 'Polymarket liquidation order failed.',
   liquidate_polymarket_order_retry_failed: 'Polymarket liquidation order failed after retries.',
@@ -181,14 +181,14 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
   // ─── Open position ─────────────────────────────────────────────────────
   finalize_open_transaction_failed: 'Finalising the open transaction failed.',
   open_position_retry_transaction_failed: 'Open-position retry failed.',
-  open_position_transaction_failed: 'Open-position transaction failed on-chain.',
+  open_position_transaction_failed: 'Open-position transaction failed onchain.',
   open_position_transaction_not_found: 'Open-position transaction not found.',
   polymarket_finalize_open_failed: 'Finalising the Polymarket open order failed.',
   open_polymarket_order_failed: 'Polymarket open order failed.',
   open_polymarket_order_retry_failed: 'Polymarket open order failed after retries.',
   open_position_already_open: 'This position is already open.',
   open_position_position_not_found: 'Position not found.',
-  open_position_reverted: 'Open was reverted on-chain. No funds were moved.',
+  open_position_reverted: 'Open was reverted onchain. No funds were moved.',
   open_position_price_exceeded_tolerance: 'Price moved beyond your slippage tolerance before the order filled. Try again with a fresh quote.',
   revert_open_transaction_failed: 'Reverting the open transaction failed.',
 
@@ -368,8 +368,8 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
   position_transition_no_fulfilled_exchange: 'No fulfilled exchange transaction found.',
   position_transition_not_found: 'Position transition not found.',
   position_transition_not_implemented: 'This position transition is not supported.',
-  position_transition_on_chain_state_mismatch: 'On-chain state does not match expected position state.',
-  position_transition_on_chain_transaction_hash_mismatch: 'On-chain transaction hash does not match expected value.',
+  position_transition_on_chain_state_mismatch: 'Onchain state does not match expected position state.',
+  position_transition_on_chain_transaction_hash_mismatch: 'Onchain transaction hash does not match expected value.',
   position_transition_open_order_already_fulfilled: 'Open order has already been fulfilled.',
   position_transition_resume_open_input_missing: 'Missing input to resume the open flow.',
   position_transition_terminal_state: 'Position is in a terminal state — no further transitions allowed.',
@@ -394,7 +394,7 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
   settle_polymarket_order_failed: 'Polymarket settle order failed.',
   settle_polymarket_order_retry_failed: 'Polymarket settle order failed after retries.',
   settle_position_already_settled: 'Position has already been settled.',
-  settle_position_transaction_failed: 'Settle transaction failed on-chain.',
+  settle_position_transaction_failed: 'Settle transaction failed onchain.',
   settle_position_transaction_not_found: 'Settle transaction not found.',
 
   // ─── Settler ───────────────────────────────────────────────────────────
@@ -406,14 +406,14 @@ const friendlyByCode: Record<string, FriendlyEntry> = {
   redemption_oracle_not_resolved: 'Oracle has not resolved yet — redemption is not available.',
 
   // ─── Position validator ────────────────────────────────────────────────
-  position_validator_balance_fetch_failed: 'Could not fetch on-chain balances. Try again shortly.',
+  position_validator_balance_fetch_failed: 'Could not fetch onchain balances. Try again shortly.',
   position_validator_invalid_token_id: 'Invalid token ID for this market.',
   position_validator_stale_order_book: 'Order book data is stale. Refresh and try again.',
 
   // ─── EVM ───────────────────────────────────────────────────────────────
   evm_gas_price_circuit_breaker: 'EVM gas price is too high — trading is temporarily paused.',
   evm_gas_price_spike: 'EVM gas price spiked. Try again shortly.',
-  evm_simulation_failed: 'Transaction simulation failed. The transaction would revert on-chain.',
+  evm_simulation_failed: 'Transaction simulation failed. The transaction would revert onchain.',
   evm_receipt_timeout: 'Transaction confirmation timed out. Check status before retrying.',
   evm_transaction_failed: 'EVM transaction failed.',
 

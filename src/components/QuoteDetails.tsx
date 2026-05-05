@@ -109,7 +109,7 @@ export function QuoteDetails({
         value={`$${offer.expectedOpenTradingFeeUsd}`}
         previousValue={prev ? `$${prev.expectedOpenTradingFeeUsd}` : undefined}
       />
-      <StatRow label="Time-based fee" value="0.01%" />
+      <StatRow label="Time-based fee (per 5 hrs)" value="0.01%" />
 
       <div
         style={{

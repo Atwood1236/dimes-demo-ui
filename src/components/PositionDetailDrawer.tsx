@@ -401,25 +401,6 @@ function OpenPositionDetail({
           </div>
         )}
 
-        {isFullyDeleveraged && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: 'rgba(68,255,151,0.06)',
-              border: '1px solid rgba(68,255,151,0.15)',
-              borderRadius: 0,
-              padding: '10px 12px',
-              marginBottom: 14,
-            }}
-          >
-            <span style={{ fontSize: 12, color: 'var(--green)', lineHeight: 1.4 }}>
-              This position has no liquidation risk. Your remaining funds are fully yours.
-            </span>
-          </div>
-        )}
-
         <StatGroup label="Pricing">
           <StatRow label="Quote Price" value={`$${position.entry.priceUsd}`} />
           <StatRow
@@ -484,7 +465,7 @@ function OpenPositionDetail({
             value={`$${accruedFees.toFixed(2)}`}
             valueColor="var(--text-muted)"
           />
-          <StatRow label="Time-based fee rate" value="0.01% APR" />
+          <StatRow label="Time-based fee rate (per 5 hrs)" value="0.01% APR" />
           <StatRow
             label="Total fees paid"
             value={`$${(parseFloat(position.entry.originationFeeUsd) + accruedFees).toFixed(2)}`}
