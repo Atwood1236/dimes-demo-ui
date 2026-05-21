@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ClosedPosition } from '../api/types'
+import { formatOpenedAtEt } from '../utils/format'
 import { CardShell } from './CardShell'
 import { MicroStat, PnlHero } from './CardViewParts'
 import { PositionIdRow } from './PositionCard'
@@ -43,6 +44,8 @@ export function SettledCard({
   const filledPrice = position.entry.effectiveEntryPriceUsd
   const entryNotional = parseFloat(position.entry.notionalUsd)
 
+  const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
+
   return (
     <CardShell
       variant="settled"
@@ -61,6 +64,20 @@ export function SettledCard({
           }}
         >
           <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+            {openedAtEt && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  marginBottom: 4,
+                  letterSpacing: 0.2,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                title="Position opened (America/New_York)"
+              >
+                {openedAtEt}
+              </div>
+            )}
             <div
               onClick={(e) => {
                 e.stopPropagation()

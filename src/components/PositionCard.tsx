@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MicroStat } from './CardViewParts'
 import type { OpenPosition } from '../api/types'
+import { formatOpenedAtEt } from '../utils/format'
 import { CardShell } from './CardShell'
 
 export function PositionCard({
@@ -70,6 +71,8 @@ export function PositionCard({
   }
 
   const positionValueUsd = parseFloat(position.current.positionValueUsd)
+
+  const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
 
   return (
     <CardShell
@@ -190,6 +193,20 @@ export function PositionCard({
           }}
         >
           <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+            {openedAtEt && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  marginBottom: 4,
+                  letterSpacing: 0.2,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                title="Position opened (America/New_York)"
+              >
+                {openedAtEt}
+              </div>
+            )}
             <div
               onClick={(e) => {
                 e.stopPropagation()

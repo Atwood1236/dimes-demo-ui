@@ -50,3 +50,21 @@ export function formatUsd(value: number): string {
     maximumFractionDigits: 2,
   }).format(value);
 }
+
+/** Format an ISO 8601 timestamp as a short Eastern Time string, e.g. "Mar 20, 2026, 6:00 AM ET". */
+export function formatOpenedAtEt(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return (
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date) + ' ET'
+  );
+}

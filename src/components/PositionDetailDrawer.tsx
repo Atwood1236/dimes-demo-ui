@@ -13,7 +13,7 @@ import { useRequestClosePushFunded } from '../contract/pushFundedHooks'
 import { useCancelPosition } from '../hooks/useCancelPosition'
 import { useContractInfo } from '../hooks/useContractInfo'
 import { useAuthStore } from '../store/auth'
-import { formatSlippageBps } from '../utils/format'
+import { formatOpenedAtEt, formatSlippageBps } from '../utils/format'
 import { ErrorBanner } from './ErrorBanner'
 import { StatRow } from './StatRow'
 import { StatGroup, PnlHero } from './CardViewParts'
@@ -76,12 +76,14 @@ function DrawerHeader({
   title,
   marketTicker,
   positionId,
+  openedAtEt,
   onClose,
   badges,
 }: {
   title: string
   marketTicker: string
   positionId?: string
+  openedAtEt?: string | null
   onClose: () => void
   badges: React.ReactNode
 }) {
@@ -103,6 +105,20 @@ function DrawerHeader({
         }}
       >
         <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+          {openedAtEt && (
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                marginBottom: 4,
+                letterSpacing: 0.2,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+              title="Position opened (America/New_York)"
+            >
+              {openedAtEt}
+            </div>
+          )}
           <div
             onClick={() => copy(marketTicker, 'ticker')}
             title={
@@ -323,12 +339,15 @@ function OpenPositionDetail({
   const isInFlight = position.status === 'pending' || position.status === 'closing' || position.status === 'settling' || isUnwindingPos
   const statusLabel = isVoided ? 'voided' : position.status === 'pending' ? 'created' : position.status
 
+  const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
+
   return (
     <div>
       <DrawerHeader
         title={displayTitle}
         marketTicker={position.marketTicker}
         positionId={position.id}
+        openedAtEt={openedAtEt}
         onClose={onClose}
         badges={
           <>
@@ -715,12 +734,15 @@ function ClosedPositionDetail({
     ? describeFailureReason(rawFailureCode)
     : null
 
+  const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
+
   return (
     <div>
       <DrawerHeader
         title={displayTitle}
         marketTicker={position.marketTicker}
         positionId={position.id}
+        openedAtEt={openedAtEt}
         onClose={onClose}
         badges={
           <Badge
