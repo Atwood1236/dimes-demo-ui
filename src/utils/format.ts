@@ -52,7 +52,7 @@ export function formatUsd(value: number): string {
 }
 
 /** Format an ISO 8601 timestamp as a short Eastern Time string, e.g. "Mar 20, 2026, 6:00 AM ET". */
-export function formatOpenedAtEt(iso: string | null | undefined): string | null {
+export function formatDateTimeEt(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
@@ -68,3 +68,6 @@ export function formatOpenedAtEt(iso: string | null | undefined): string | null 
     }).format(date) + ' ET'
   );
 }
+
+/** @deprecated Use {@link formatDateTimeEt}. Kept as a named alias for existing call sites. */
+export const formatOpenedAtEt = formatDateTimeEt;

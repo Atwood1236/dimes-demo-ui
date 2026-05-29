@@ -904,7 +904,7 @@ function SideButton({
 
 const TX_STEPS = [
   { key: 'signing', label: 'Confirm in wallet' },
-  { key: 'confirming', label: 'Waiting for on-chain confirmation' },
+  { key: 'confirming', label: 'Waiting for onchain confirmation' },
 ] as const
 
 function TxProgress({ step }: { step: 'signing' | 'confirming' }) {

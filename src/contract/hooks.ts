@@ -47,7 +47,7 @@ async function diagnoseRevert(
       // fall through to generic message
     }
   }
-  return new Error('Transaction reverted on-chain.');
+  return new Error('Transaction reverted onchain.');
 }
 
 function useRevertError(

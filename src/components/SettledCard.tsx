@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ClosedPosition } from '../api/types'
-import { formatOpenedAtEt } from '../utils/format'
+import { formatOpenedAtEt, formatDateTimeEt } from '../utils/format'
 import { CardShell } from './CardShell'
 import { MicroStat, PnlHero } from './CardViewParts'
 import { PositionIdRow } from './PositionCard'
@@ -23,6 +23,7 @@ export function SettledCard({
   isSelected?: boolean
 }) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
   const displayTitle = position.marketTitle || position.marketTicker
 
   const copyToClipboard = (value: string, key: string) => {
@@ -45,6 +46,7 @@ export function SettledCard({
   const entryNotional = parseFloat(position.entry.notionalUsd)
 
   const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
+  const closedAtEt = formatDateTimeEt(position.result.closedAt)
 
   return (
     <CardShell
@@ -64,18 +66,34 @@ export function SettledCard({
           }}
         >
           <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-            {openedAtEt && (
-              <div
-                style={{
-                  fontSize: 11,
-                  color: 'var(--text-muted)',
-                  marginBottom: 4,
-                  letterSpacing: 0.2,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-                title="Position opened (America/New_York)"
-              >
-                {openedAtEt}
+            {(openedAtEt || closedAtEt) && (
+              <div style={{ marginBottom: 4 }}>
+                {openedAtEt && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      letterSpacing: 0.2,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                    title="Position opened (America/New_York)"
+                  >
+                    Opened {openedAtEt}
+                  </div>
+                )}
+                {closedAtEt && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      letterSpacing: 0.2,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                    title="Position closed (America/New_York)"
+                  >
+                    Closed {closedAtEt}
+                  </div>
+                )}
               </div>
             )}
             <div
@@ -134,52 +152,100 @@ export function SettledCard({
             >
               {reason}
             </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setCollapsed((c) => !c)
+              }}
+              aria-label={collapsed ? 'Expand card' : 'Collapse card'}
+              aria-expanded={!collapsed}
+              title={collapsed ? 'Expand' : 'Collapse'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 22,
+                height: 22,
+                padding: 0,
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 0,
+                color: 'var(--text-dim)',
+                cursor: 'pointer',
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transform: collapsed ? 'rotate(-90deg)' : 'none',
+                  transition: 'transform 0.18s ease',
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
           </div>
         </div>
 
-        <PnlHero
-          label="Realized PnL"
-          value={`${pnlPrefix}$${Math.abs(realizedPnl).toFixed(2)}`}
-          pctValue={`${pnlPrefix}${roePct.toFixed(1)}%`}
-          color={pnlColor}
-        />
+        {!collapsed && (
+          <>
+            <PnlHero
+              label="Realized PnL"
+              value={`${pnlPrefix}$${Math.abs(realizedPnl).toFixed(2)}`}
+              pctValue={`${pnlPrefix}${roePct.toFixed(1)}%`}
+              color={pnlColor}
+            />
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '14px 18px',
-          }}
-        >
-          <MicroStat label="Entry price" value={`$${position.entry.priceUsd}`} />
-          <MicroStat
-            label="Filled price"
-            value={filledPrice ? `$${filledPrice}` : '—'}
-            valueColor={filledPrice ? undefined : 'var(--text-muted)'}
-          />
-          <MicroStat
-            label="Entry notional"
-            value={`$${entryNotional.toFixed(2)}`}
-          />
-          <MicroStat
-            label="Proceeds"
-            value={`$${position.result.proceedsUsd}`}
-            valueColor={pnlColor}
-          />
-          <MicroStat
-            label="Origination fee"
-            value={`$${parseFloat(position.fees.originationFeeUsd).toFixed(2)}`}
-          />
-          <MicroStat label="Total fees" value={`$${position.fees.totalFeesUsd}`} />
-          <MicroStat
-            label="Entry leverage"
-            value={`${(position.entry.leverageBps / 10000).toFixed(1)}x`}
-          />
-          <MicroStat
-            label="Effective leverage"
-            value={`${(position.effectiveLeverageBps / 10000).toFixed(1)}x`}
-          />
-        </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '14px 18px',
+              }}
+            >
+              <MicroStat label="Entry price" value={`$${position.entry.priceUsd}`} />
+              <MicroStat
+                label="Filled price"
+                value={filledPrice ? `$${filledPrice}` : '—'}
+                valueColor={filledPrice ? undefined : 'var(--text-muted)'}
+              />
+              <MicroStat
+                label="Entry collateral"
+                value={`$${entryCollateral.toFixed(2)}`}
+              />
+              <MicroStat
+                label="Entry notional"
+                value={`$${entryNotional.toFixed(2)}`}
+              />
+              <MicroStat
+                label="Proceeds"
+                value={`$${position.result.proceedsUsd}`}
+                valueColor={pnlColor}
+              />
+              <MicroStat
+                label="Origination fee"
+                value={`$${parseFloat(position.fees.originationFeeUsd).toFixed(2)}`}
+              />
+              <MicroStat label="Total fees" value={`$${position.fees.totalFeesUsd}`} />
+              <MicroStat
+                label="Entry leverage"
+                value={`${(position.entry.leverageBps / 10000).toFixed(1)}x`}
+              />
+              <MicroStat
+                label="Effective leverage"
+                value={`${(position.effectiveLeverageBps / 10000).toFixed(1)}x`}
+              />
+            </div>
+          </>
+        )}
       </div>
     </CardShell>
   )

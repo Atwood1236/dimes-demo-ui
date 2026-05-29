@@ -13,7 +13,7 @@ import { useRequestClosePushFunded } from '../contract/pushFundedHooks'
 import { useCancelPosition } from '../hooks/useCancelPosition'
 import { useContractInfo } from '../hooks/useContractInfo'
 import { useAuthStore } from '../store/auth'
-import { formatOpenedAtEt, formatSlippageBps } from '../utils/format'
+import { formatOpenedAtEt, formatDateTimeEt, formatSlippageBps } from '../utils/format'
 import { ErrorBanner } from './ErrorBanner'
 import { StatRow } from './StatRow'
 import { StatGroup, PnlHero } from './CardViewParts'
@@ -77,6 +77,7 @@ function DrawerHeader({
   marketTicker,
   positionId,
   openedAtEt,
+  closedAtEt,
   onClose,
   badges,
 }: {
@@ -84,6 +85,7 @@ function DrawerHeader({
   marketTicker: string
   positionId?: string
   openedAtEt?: string | null
+  closedAtEt?: string | null
   onClose: () => void
   badges: React.ReactNode
 }) {
@@ -92,6 +94,12 @@ function DrawerHeader({
     navigator.clipboard.writeText(value)
     setCopiedKey(key)
     setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500)
+  }
+  const dateLineStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: 'var(--text-muted)',
+    letterSpacing: 0.2,
+    fontVariantNumeric: 'tabular-nums',
   }
   return (
     <div style={{ padding: '20px 24px 0' }}>
@@ -105,18 +113,18 @@ function DrawerHeader({
         }}
       >
         <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-          {openedAtEt && (
-            <div
-              style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                marginBottom: 4,
-                letterSpacing: 0.2,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              title="Position opened (America/New_York)"
-            >
-              {openedAtEt}
+          {(openedAtEt || closedAtEt) && (
+            <div style={{ marginBottom: 4 }}>
+              {openedAtEt && (
+                <div style={dateLineStyle} title="Position opened (America/New_York)">
+                  {closedAtEt ? `Opened ${openedAtEt}` : openedAtEt}
+                </div>
+              )}
+              {closedAtEt && (
+                <div style={dateLineStyle} title="Position closed (America/New_York)">
+                  Closed {closedAtEt}
+                </div>
+              )}
             </div>
           )}
           <div
@@ -325,15 +333,14 @@ function OpenPositionDetail({
 
   const currentPrice = parseFloat(position.current.markPriceUsd)
   const liquidationPrice = parseFloat(position.risk.currentLiquidationPriceUsd)
+  const hasLiquidationPrice = liquidationPrice > 0
+  // Show the absolute distance whenever we have a valid liquidation price,
+  // regardless of which side of the mark it sits on (a stale/crossed liq
+  // price is exactly when the figure matters most).
   let distancePctDisplay = '—'
-  if (!isFullyDeleveraged && currentPrice > 0 && liquidationPrice > 0) {
-    const inBuffer = isYes
-      ? currentPrice > liquidationPrice
-      : currentPrice < liquidationPrice
-    if (inBuffer) {
-      const pct = (Math.abs(currentPrice - liquidationPrice) / currentPrice) * 100
-      distancePctDisplay = `${pct.toFixed(1)}%`
-    }
+  if (currentPrice > 0 && hasLiquidationPrice) {
+    const pct = (Math.abs(currentPrice - liquidationPrice) / currentPrice) * 100
+    distancePctDisplay = `${pct.toFixed(1)}%`
   }
 
   const isInFlight = position.status === 'pending' || position.status === 'closing' || position.status === 'settling' || isUnwindingPos
@@ -446,7 +453,7 @@ function OpenPositionDetail({
           {!isVoided && (
             <StatRow label="Exit Price" value={`$${position.current.markPriceUsd}`} />
           )}
-          {!isFullyDeleveraged && !isVoided && (
+          {!isVoided && hasLiquidationPrice && (
             <>
               <StatRow
                 label="Liquidation Price"
@@ -512,7 +519,7 @@ function OpenPositionDetail({
             )
           })()}
           <StatRow
-            label="Time-based fees accrued"
+            label="Time-based fees accrued (per 5 hrs)"
             value={`$${accruedFees.toFixed(2)}`}
             valueColor="var(--text-muted)"
           />
@@ -610,7 +617,7 @@ function OpenPositionDetail({
             >
               {isPendingPosition
                 ? 'Cancel this pending position? Your collateral will be returned once the cancellation is processed.'
-                : 'Close this position? This will request an on-chain unwind at the current market price.'}
+                : 'Close this position? This will request an onchain unwind at the current market price.'}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -735,6 +742,7 @@ function ClosedPositionDetail({
     : null
 
   const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
+  const closedAtEt = formatDateTimeEt(position.result.closedAt)
 
   return (
     <div>
@@ -743,6 +751,7 @@ function ClosedPositionDetail({
         marketTicker={position.marketTicker}
         positionId={position.id}
         openedAtEt={openedAtEt}
+        closedAtEt={closedAtEt}
         onClose={onClose}
         badges={
           <Badge
@@ -824,7 +833,7 @@ function ClosedPositionDetail({
               </>
             )
           })()}
-          <StatRow label="Lifetime Fee" value={`$${position.fees.totalLifetimeFeeUsd}`} />
+          <StatRow label="Time-based fees (per 5 hrs)" value={`$${position.fees.totalLifetimeFeeUsd}`} />
           <StatRow
             label="Execution Slippage"
             value={slippageText ?? 'Pending fill'}

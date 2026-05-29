@@ -30,8 +30,8 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: 'rgba(245,166,35,0.08)',
-            border: '1px solid rgba(245,166,35,0.22)',
+            background: 'rgba(68,255,151,0.08)',
+            border: '1px solid rgba(68,255,151,0.22)',
             borderRadius: 0,
             padding: '10px 12px',
             marginBottom: 16,
@@ -44,13 +44,13 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               width: 8,
               height: 8,
               borderRadius: '50%',
-              background: '#F5A623',
+              background: 'var(--green)',
               animation: 'pendingPulse 1.1s ease-in-out infinite',
               flexShrink: 0,
             }}
           />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 12, color: '#F5A623', fontWeight: 600 }}>
+            <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
               Broadcasting to the network
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -64,7 +64,7 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               left: 0,
               right: 0,
               height: 2,
-              background: 'rgba(245,166,35,0.15)',
+              background: 'rgba(68,255,151,0.15)',
               overflow: 'hidden',
             }}
           >
@@ -72,7 +72,7 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               style={{
                 height: '100%',
                 width: '40%',
-                background: '#F5A623',
+                background: 'var(--green)',
                 animation: 'pendingSlide 1.6s ease-in-out infinite',
               }}
             />

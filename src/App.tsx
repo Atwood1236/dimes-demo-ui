@@ -22,7 +22,7 @@ const sectionTitle: React.CSSProperties = {
 function MarketsTitle({ count }: { count?: number }) {
   return (
     <h2 style={sectionTitle}>
-      Supported Markets
+      Live Supported Markets
       {count != null && (
         <>
           <span style={{ color: 'var(--text-dim)', margin: '0 8px' }}>·</span>

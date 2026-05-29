@@ -34,7 +34,7 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
   active: 'Market is open and accepting trades',
   closed: 'Trading has stopped, awaiting resolution',
   determined: 'Outcome determined, awaiting finalization',
-  finalized: 'Resolved and finalized on-chain',
+  finalized: 'Resolved and finalized onchain',
   disputed: 'Outcome under dispute',
 }
 

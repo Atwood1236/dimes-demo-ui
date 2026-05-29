@@ -59,15 +59,14 @@ export function PositionCard({
 
   const currentPrice = parseFloat(position.current.markPriceUsd)
   const liquidationPrice = parseFloat(position.risk.currentLiquidationPriceUsd)
+  // Show the absolute distance whenever we have a valid liquidation price.
+  // (We used to gate on the price being on the "safe" side of liquidation,
+  // which left the figure blank whenever the liq price was stale or had
+  // crossed the mark — the case people actually want to see.)
   let distancePctDisplay = '—'
   if (!isFullyDeleveraged && currentPrice > 0 && liquidationPrice > 0) {
-    const inBuffer = isYes
-      ? currentPrice > liquidationPrice
-      : currentPrice < liquidationPrice
-    if (inBuffer) {
-      const pct = (Math.abs(currentPrice - liquidationPrice) / currentPrice) * 100
-      distancePctDisplay = `${pct.toFixed(1)}%`
-    }
+    const pct = (Math.abs(currentPrice - liquidationPrice) / currentPrice) * 100
+    distancePctDisplay = `${pct.toFixed(1)}%`
   }
 
   const positionValueUsd = parseFloat(position.current.positionValueUsd)
@@ -143,10 +142,10 @@ export function PositionCard({
                 {isUnwindingPosition
                   ? 'Deleveraging in progress…'
                   : isClosingPosition
-                  ? 'Awaiting on-chain confirmation on Polygon…'
+                  ? 'Awaiting onchain confirmation on Polygon…'
                   : isSettlingPosition
-                  ? 'Market resolved — awaiting on-chain settlement…'
-                  : 'Awaiting on-chain confirmation on Polygon…'}
+                  ? 'Market resolved — awaiting onchain settlement…'
+                  : 'Awaiting onchain confirmation on Polygon…'}
               </div>
             </div>
             <div
@@ -308,6 +307,10 @@ export function PositionCard({
           <MicroStat
             label="Current notional"
             value={`$${parseFloat(position.current.notionalUsd).toFixed(2)}`}
+          />
+          <MicroStat
+            label="Collateral"
+            value={`$${parseFloat(position.current.collateralUsd).toFixed(2)}`}
           />
           <MicroStat
             label="Position value"
