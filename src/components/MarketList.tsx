@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMarkets } from '../hooks/useMarkets'
 import type { Market } from '../api/types'
+import {
+  leverageMaxBps,
+  getSidedEligibility,
+  rejectionReasonText,
+} from '../api/types'
 
 function getQueryParam(key: string): string | undefined {
   const value = new URLSearchParams(window.location.search).get(key)
@@ -20,23 +25,37 @@ function setQueryParams(params: Record<string, string | undefined>) {
   window.history.replaceState(null, '', url.toString())
 }
 
+function formatCategory(c: string) {
+  return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()
+}
+
+const STATUS_DESCRIPTIONS: Record<string, string> = {
+  open: 'Market is open and accepting trades',
+  active: 'Market is open and accepting trades',
+  closed: 'Trading has stopped, awaiting resolution',
+  determined: 'Outcome determined, awaiting finalization',
+  finalized: 'Resolved and finalized onchain',
+  disputed: 'Outcome under dispute',
+}
+
 export function MarketList({
   onSelectMarket,
   selectedMarketId,
+  onTotalCount,
 }: {
   onSelectMarket: (market: Market) => void
-  selectedMarketId?: string | null
+  selectedMarketId?: string
+  onTotalCount?: (count: number | undefined) => void
 }) {
   const [search, setSearch] = useState(() => getQueryParam('q') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(() => getQueryParam('q') ?? '')
   const [category, setCategoryState] = useState<string | undefined>(() => getQueryParam('category'))
   const [status, setStatusState] = useState<string | undefined>(() => getQueryParam('status'))
-  const [eligible, setEligibleState] = useState<string | undefined>(() => getQueryParam('eligible') ?? 'yes')
+  const [eligible, setEligibleState] = useState<string | undefined>('yes')
   const [copiedTicker, setCopiedTicker] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Cursor-based pagination: current page cursor + a stack to walk backwards.
   const [cursor, setCursor] = useState<string | undefined>(() => getQueryParam('after'))
   const [cursorStack, setCursorStack] = useState<string[]>([])
 
@@ -45,8 +64,6 @@ export function MarketList({
     setCursorStack([])
   }
 
-  // Debounce search input. Resetting pagination when the debounced value
-  // actually changes happens below via setSearch's wrapper.
   useEffect(() => {
     debounceRef.current = setTimeout(() => {
       setDebouncedSearch(search)
@@ -68,16 +85,14 @@ export function MarketList({
     resetPagination()
   }
 
-  // Sync state to URL query params
   useEffect(() => {
     setQueryParams({
       q: debouncedSearch || undefined,
       category,
       status,
-      eligible,
       after: cursor,
     })
-  }, [debouncedSearch, category, status, eligible, cursor])
+  }, [debouncedSearch, category, status, cursor])
 
   const acceptingNewPositions = eligible === 'yes' ? true : eligible === 'no' ? false : undefined
 
@@ -87,6 +102,7 @@ export function MarketList({
     status,
     acceptingNewPositions,
     cursor,
+    'depth_desc',
   )
 
   const queryClient = useQueryClient()
@@ -95,18 +111,16 @@ export function MarketList({
   }
 
   const markets = page?.data
-
   const hasMore = page?.hasMore ?? false
   const hasPrev = cursorStack.length > 0
 
+  useEffect(() => {
+    onTotalCount?.(page?.totalCount)
+  }, [page?.totalCount, onTotalCount])
+
   const categories = ['Sport', 'Crypto']
 
-  const formatCategory = (c: string) =>
-    c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()
-
   const shouldScrollRef = useRef(false)
-
-  // Scroll to top after page data loads from a pagination click
   useEffect(() => {
     if (shouldScrollRef.current && !isLoading) {
       shouldScrollRef.current = false
@@ -138,43 +152,23 @@ export function MarketList({
     setTimeout(() => setCopiedTicker(null), 1500)
   }
 
-  const inputStyle: React.CSSProperties = {
-    background: 'var(--surface-subtle)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 6,
-    padding: '8px 12px',
-    fontSize: 13,
-    color: 'var(--text)',
-    outline: 'none',
-  }
 
-  const thStyle: React.CSSProperties = {
-    padding: '10px 16px',
-    fontSize: 11,
-    fontWeight: 500,
-    color: 'var(--text-dim)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    textAlign: 'left',
-    whiteSpace: 'nowrap',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-  }
 
   return (
-    <div ref={containerRef} style={{ padding: '16px 0' }}>
+    <div ref={containerRef}>
       {/* Search & filter toolbar */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div className="markets-toolbar">
         <input
           type="text"
           placeholder="Search markets..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ ...inputStyle, flex: '1 1 200px', minWidth: 180 }}
+          className="markets-toolbar__input"
         />
         <select
           value={category ?? ''}
           onChange={(e) => setCategory(e.target.value || undefined)}
-          style={{ ...inputStyle, flex: '0 0 auto', cursor: 'pointer' }}
+          className="markets-toolbar__select"
         >
           <option value="">All categories</option>
           {categories.map((c) => (
@@ -184,7 +178,7 @@ export function MarketList({
         <select
           value={status ?? ''}
           onChange={(e) => setStatus(e.target.value || undefined)}
-          style={{ ...inputStyle, flex: '0 0 auto', cursor: 'pointer' }}
+          className="markets-toolbar__select"
         >
           <option value="">All statuses</option>
           <option value="active">Active</option>
@@ -196,7 +190,7 @@ export function MarketList({
         <select
           value={eligible ?? ''}
           onChange={(e) => setEligible(e.target.value || undefined)}
-          style={{ ...inputStyle, flex: '0 0 auto', cursor: 'pointer' }}
+          className="markets-toolbar__select"
         >
           <option value="">All eligibility</option>
           <option value="yes">Accepting quotes</option>
@@ -207,16 +201,7 @@ export function MarketList({
           disabled={isFetching}
           title="Refresh"
           aria-label="Refresh markets"
-          style={{
-            ...inputStyle,
-            flex: '0 0 auto',
-            cursor: isFetching ? 'wait' : 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 10px',
-            color: 'var(--text)',
-          }}
+          className="markets-toolbar__refresh"
         >
           <svg
             width="14"
@@ -255,40 +240,53 @@ export function MarketList({
         </div>
       ) : (
         <>
-          <div
-            style={{
-              border: '1px solid rgba(238,255,0,0.15)',
-              borderRadius: 12,
-              overflow: 'auto',
-              background: 'var(--card)',
-            }}
-          >
+          <div className="markets-table-wrap">
             <table
               style={{
                 width: '100%',
-                minWidth: 800,
                 borderCollapse: 'collapse',
+                tableLayout: 'fixed',
               }}
             >
+              <colgroup>
+                <col style={{ width: 'auto' }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 240 }} />
+                <col style={{ width: 60 }} />
+              </colgroup>
               <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                  <th style={thStyle}>Ticker</th>
-                  <th style={thStyle}>Title</th>
-                  <th style={thStyle}>Category</th>
-                  <th style={thStyle}>Status</th>
-                  <th style={thStyle}>Eligible</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Max Leverage</th>
+                <tr>
+                  {['Title', 'Category', 'Status', 'Sides', 'Ticker'].map((label, i) => (
+                    <th
+                      key={label}
+                      style={{
+                        padding: '10px 14px',
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: 'var(--text-dim)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        textAlign: i === 0 ? 'left' : 'center',
+                        whiteSpace: 'nowrap',
+                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        background: 'rgba(20,20,20,0.95)',
+                      }}
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {markets.map((market) => (
+                {markets!.map((market) => (
                   <MarketRow
                     key={market.id}
                     market={market}
                     onSelect={onSelectMarket}
                     onCopy={copyTicker}
                     isCopied={copiedTicker === market.ticker}
-                    isSelected={selectedMarketId === market.id}
+                    isSelected={market.id === selectedMarketId}
                   />
                 ))}
               </tbody>
@@ -296,38 +294,29 @@ export function MarketList({
           </div>
 
           {/* Pagination */}
-          {(hasPrev || hasMore) && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 12,
-                padding: '0 4px',
-              }}
-            >
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                Page {cursorStack.length + 1}
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <PageButton
-                  label="Previous"
-                  disabled={!hasPrev}
-                  onClick={goPrev}
-                />
-                <PageButton
-                  label="Next"
-                  disabled={!hasMore}
-                  onClick={goNext}
-                />
-              </div>
-            </div>
-          )}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 8,
+              marginTop: 12,
+              padding: '0 4px',
+            }}
+          >
+            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+              Page {cursorStack.length + 1}
+            </span>
+            <PageButton label="Previous" disabled={!hasPrev} onClick={goPrev} />
+            <PageButton label="Next" disabled={!hasMore} onClick={goNext} />
+          </div>
         </>
       )}
     </div>
   )
 }
+
+
 
 function MarketRow({
   market,
@@ -343,216 +332,272 @@ function MarketRow({
   isSelected: boolean
 }) {
   const [hovered, setHovered] = useState(false)
-  const [pressed, setPressed] = useState(false)
-  const maxLeverage = (market.leverage.maxBps / 10000).toFixed(0)
 
-  const rowBg = isSelected
-    ? 'rgba(238,255,0,0.09)'
-    : pressed
-    ? 'rgba(238,255,0,0.14)'
-    : hovered
-    ? 'rgba(238,255,0,0.03)'
-    : 'transparent'
+  const maxLevYes = (leverageMaxBps(market.leverage, 'yes') / 10000).toFixed(2)
+  const maxLevNo = (leverageMaxBps(market.leverage, 'no') / 10000).toFixed(2)
+  const eligibility = getSidedEligibility(market)
 
   const tdStyle: React.CSSProperties = {
-    padding: '12px 16px',
+    padding: '12px 14px',
     fontSize: 13,
     color: 'var(--text)',
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
     borderBottom: '1px solid rgba(255,255,255,0.04)',
     transition: 'background 0.18s ease, box-shadow 0.18s ease',
   }
 
   const firstTdStyle: React.CSSProperties = {
     ...tdStyle,
-    maxWidth: 200,
+    maxWidth: 180,
     boxShadow: isSelected ? 'inset 3px 0 0 var(--yellow)' : 'none',
   }
+
+  const rowBg = isSelected
+    ? 'rgba(238,255,0,0.08)'
+    : hovered
+      ? 'rgba(238,255,0,0.03)'
+      : 'transparent'
+
+  const statusTitle = STATUS_DESCRIPTIONS[market.status] || market.status
 
   return (
     <tr
       onClick={() => onSelect(market)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false)
-        setPressed(false)
+      onMouseEnter={() => {
+        setHovered(true)
       }}
-      onMouseDown={() => setPressed(true)}
-      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         cursor: 'pointer',
         background: rowBg,
-        transition: 'background 0.18s ease',
+        transition: 'background 0.15s ease',
+        outline: isSelected ? '1px solid rgba(238,255,0,0.3)' : 'none',
       }}
     >
       <td style={firstTdStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span
-            title={market.ticker}
-            style={{
-              fontWeight: 600,
-              fontFamily: 'monospace',
-              fontSize: 12,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-              flex: '1 1 auto',
-              color: isSelected ? 'var(--yellow)' : undefined,
-            }}
-          >
-            {market.ticker}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onCopy(market.ticker)
-            }}
-            title="Copy ticker"
-            style={{
-              background: 'none',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 4,
-              padding: '2px 6px',
-              cursor: 'pointer',
-              color: isCopied ? 'var(--yellow)' : 'var(--text-dim)',
-              fontSize: 11,
-              lineHeight: 1,
-              transition: 'color 0.15s ease, border-color 0.15s ease',
-              borderColor: isCopied ? 'rgba(238,255,0,0.3)' : 'rgba(255,255,255,0.1)',
-            }}
-          >
-            {isCopied ? 'Copied' : 'Copy'}
-          </button>
-        </div>
+        <span
+          style={{
+            color: '#ffffff',
+            fontWeight: 500,
+          }}
+          title={market.title || market.ticker}
+        >
+          {market.title || '—'}
+        </span>
       </td>
-      <td
-        style={{
-          ...tdStyle,
-          maxWidth: 280,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {market.title || '—'}
-      </td>
-      <td style={tdStyle}>
+      <td style={{ ...tdStyle, textAlign: 'center' }}>
         {market.category && (
           <span
             style={{
               fontSize: 11,
               color: 'var(--text-muted)',
               background: 'var(--surface-subtle)',
-              borderRadius: 4,
+              borderRadius: 0,
               padding: '2px 8px',
             }}
           >
-            {market.category}
+            {formatCategory(market.category)}
           </span>
         )}
       </td>
-      <td style={tdStyle}>
+      <td style={{ ...tdStyle, textAlign: 'center' }}>
         <span
+          title={statusTitle}
           style={{
             fontSize: 11,
             fontWeight: 500,
-            color: market.status === 'open' ? 'var(--green)' : 'var(--text-muted)',
+            color: market.status === 'active' ? 'var(--green)' : 'var(--text-muted)',
             background:
-              market.status === 'open'
-                ? 'var(--green-soft)'
-                : 'var(--border)',
+              market.status === 'active' ? 'var(--green-soft)' : 'var(--border)',
             border: `1px solid ${
-              market.status === 'open'
-                ? 'rgba(68,255,151,0.2)'
-                : 'var(--border)'
+              market.status === 'active' ? 'rgba(68,255,151,0.2)' : 'var(--border)'
             }`,
-            borderRadius: 4,
+            borderRadius: 0,
             padding: '2px 8px',
             textTransform: 'uppercase',
+            cursor: 'help',
           }}
         >
           {market.status}
         </span>
       </td>
-      <td style={tdStyle}>
-        {market.acceptingNewPositions ? (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              color: 'var(--green)',
-              background: 'var(--green-soft)',
-              border: '1px solid rgba(68,255,151,0.2)',
-              borderRadius: 4,
-              padding: '2px 8px',
-            }}
-          >
-            YES
-          </span>
-        ) : (
-          <span
-            title={market.rejectionReasonCode ?? undefined}
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              color: '#FF6B6B',
-              background: 'rgba(255,107,107,0.08)',
-              border: '1px solid rgba(255,107,107,0.2)',
-              borderRadius: 4,
-              padding: '2px 8px',
-              cursor: market.rejectionReasonCode ? 'help' : undefined,
-            }}
-          >
-            {market.rejectionReasonCode
-              ? market.rejectionReasonCode.replace(/^offer_/, '').replaceAll('_', ' ')
-              : 'NO'}
-          </span>
-        )}
+      <td style={{ ...tdStyle, textAlign: 'center', overflow: 'visible' }}>
+        <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+          <SidePill side="yes" eligibility={eligibility.yes} maxLevX={maxLevYes} />
+          <SidePill side="no" eligibility={eligibility.no} maxLevX={maxLevNo} />
+        </div>
       </td>
-      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: 'var(--yellow)' }}>
-        {maxLeverage}x
+      <td style={{ ...tdStyle, textAlign: 'center' }}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onCopy(market.ticker)
+          }}
+          title={isCopied ? `Copied ${market.ticker}` : `Copy ticker: ${market.ticker}`}
+          style={{
+            background: 'none',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 0,
+            padding: '4px 8px',
+            cursor: 'pointer',
+            color: isCopied ? 'var(--yellow)' : 'var(--text-dim)',
+            fontSize: 10,
+            lineHeight: 1,
+            transition: 'color 0.15s ease, border-color 0.15s ease',
+            borderColor: isCopied ? 'rgba(238,255,0,0.3)' : 'rgba(255,255,255,0.1)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+{}
+        </button>
       </td>
     </tr>
   )
 }
 
-function MarketListSkeleton() {
-  const columns = [80, 240, 70, 60, 50, 60]
-  const rows = 15
-  const rowTdStyle: React.CSSProperties = {
-    padding: '12px 16px',
-    borderBottom: '1px solid rgba(255,255,255,0.04)',
+function SidePill({
+  side,
+  eligibility,
+  maxLevX,
+}: {
+  side: 'yes' | 'no'
+  eligibility: { open: boolean; reasonCode: string | null }
+  maxLevX: string
+}) {
+  const label = side.toUpperCase()
+  if (eligibility.open) {
+    return (
+      <span
+        title={`${label}: max ${maxLevX}× leverage`}
+        style={{
+          fontSize: 11,
+          fontWeight: 500,
+          color: 'var(--green)',
+          background: 'var(--green-soft)',
+          border: '1px solid rgba(68,255,151,0.2)',
+          borderRadius: 0,
+          padding: '2px 8px',
+          cursor: 'help',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label} {maxLevX}×
+      </span>
+    )
   }
   return (
-    <div
+    <span
+      title={`${label}: ${rejectionReasonText(eligibility.reasonCode)}`}
       style={{
-        border: '1px solid rgba(238,255,0,0.15)',
-        borderRadius: 12,
-        overflow: 'hidden',
-        background: 'var(--card)',
+        fontSize: 11,
+        fontWeight: 500,
+        color: '#FF6B6B',
+        background: 'rgba(255,107,107,0.08)',
+        border: '1px solid rgba(255,107,107,0.2)',
+        borderRadius: 0,
+        padding: '2px 8px',
+        cursor: 'help',
+        whiteSpace: 'nowrap',
       }}
     >
-      <table style={{ width: '100%', minWidth: 800, borderCollapse: 'collapse' }}>
+      {label} ×
+    </span>
+  )
+}
+
+function MarketListSkeleton() {
+  const rows = 15
+  const thStyle: React.CSSProperties = {
+    padding: '10px 14px',
+    fontSize: 11,
+    fontWeight: 500,
+    color: 'var(--text-dim)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    whiteSpace: 'nowrap',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    background: 'rgba(20,20,20,0.95)',
+  }
+  const tdStyle: React.CSSProperties = {
+    padding: '12px 14px',
+    fontSize: 13,
+    color: 'var(--text)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    borderBottom: '1px solid rgba(255,255,255,0.04)',
+  }
+  const pulse = (r: number, c: number): React.CSSProperties => ({
+    animation: 'marketSkeletonPulse 1.4s ease-in-out infinite',
+    animationDelay: `${(r * 40 + c * 20) % 600}ms`,
+  })
+  return (
+    <>
+    <div className="markets-table-wrap">
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 'auto' }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 240 }} />
+          <col style={{ width: 60 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={thStyle}>Title</th>
+            <th style={{ ...thStyle, textAlign: 'center' }}>Category</th>
+            <th style={{ ...thStyle, textAlign: 'center' }}>Status</th>
+            <th style={{ ...thStyle, textAlign: 'center' }}>Sides</th>
+            <th style={{ ...thStyle, textAlign: 'center' }}>Ticker</th>
+          </tr>
+        </thead>
         <tbody>
           {Array.from({ length: rows }).map((_, r) => (
             <tr key={r}>
-              {columns.map((w, c) => (
-                <td key={c} style={rowTdStyle}>
-                  <div
-                    style={{
-                      height: 10,
-                      width: w,
-                      maxWidth: '100%',
-                      borderRadius: 4,
-                      background: 'rgba(255,255,255,0.06)',
-                      animation: 'marketSkeletonPulse 1.4s ease-in-out infinite',
-                      animationDelay: `${(r * 40 + c * 20) % 600}ms`,
-                    }}
-                  />
-                </td>
-              ))}
+              {/* Title — plain text, matches MarketRow fontSize 13 / fontWeight 500 */}
+              <td style={tdStyle}>
+                <span style={{ fontWeight: 500, color: 'transparent', background: 'rgba(255,255,255,0.06)', ...pulse(r, 0) }}>
+                  Loading market title here
+                </span>
+              </td>
+              {/* Category — no border badge */}
+              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                <span style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(255,255,255,0.04)', color: 'transparent', ...pulse(r, 1) }}>
+                  sport
+                </span>
+              </td>
+              {/* Status — bordered badge */}
+              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.04)', color: 'transparent', textTransform: 'uppercase', ...pulse(r, 2) }}>
+                  open
+                </span>
+              </td>
+              {/* Sides — two pill placeholders */}
+              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                <div style={{ display: 'inline-flex', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.04)', color: 'transparent', ...pulse(r, 3) }}>
+                    YES 5×
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.04)', color: 'transparent', ...pulse(r, 4) }}>
+                    NO 5×
+                  </span>
+                </div>
+              </td>
+              {/* Ticker — button with border + svg size */}
+              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid rgba(255,255,255,0.04)', padding: '4px 8px', fontSize: 10, lineHeight: 1, ...pulse(r, 5) }}>
+                  <span style={{ width: 11, height: 11 }} />
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -564,6 +609,22 @@ function MarketListSkeleton() {
         }
       `}</style>
     </div>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 8,
+        marginTop: 12,
+        padding: '0 4px',
+        visibility: 'hidden',
+      }}
+    >
+      <span style={{ fontSize: 12 }}>Page 1</span>
+      <button style={{ border: '1px solid transparent', padding: '6px 14px', fontSize: 12 }}>Previous</button>
+      <button style={{ border: '1px solid transparent', padding: '6px 14px', fontSize: 12 }}>Next</button>
+    </div>
+    </>
   )
 }
 
@@ -587,7 +648,7 @@ function PageButton({
       style={{
         background: hovered && !disabled ? 'rgba(238,255,0,0.06)' : 'var(--surface-subtle)',
         border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 6,
+        borderRadius: 0,
         padding: '6px 14px',
         fontSize: 12,
         color: disabled ? '#333333' : 'var(--text)',

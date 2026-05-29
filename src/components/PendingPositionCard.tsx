@@ -1,7 +1,19 @@
+import { useState } from 'react'
 import type { PendingPositionStub } from '../store/pendingPositions'
+import { useMarket } from '../hooks/useMarketTitle'
 import { CardShell } from './CardShell'
 
 export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
+  const market = useMarket(stub.marketTicker)
+  const displayTitle = market?.title || stub.marketTicker
+  const [marketIdCopied, setMarketIdCopied] = useState(false)
+  const onCopyMarketId = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!market?.id) return
+    navigator.clipboard.writeText(market.id)
+    setMarketIdCopied(true)
+    setTimeout(() => setMarketIdCopied(false), 1500)
+  }
   const isYes = stub.side === 'yes'
   const sideColor = isYes ? 'var(--green)' : 'var(--red)'
   const sideSoft = isYes ? 'var(--green-soft)' : 'var(--red-soft)'
@@ -18,9 +30,9 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: 'rgba(245,166,35,0.08)',
-            border: '1px solid rgba(245,166,35,0.22)',
-            borderRadius: 8,
+            background: 'rgba(68,255,151,0.08)',
+            border: '1px solid rgba(68,255,151,0.22)',
+            borderRadius: 0,
             padding: '10px 12px',
             marginBottom: 16,
             position: 'relative',
@@ -32,13 +44,13 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               width: 8,
               height: 8,
               borderRadius: '50%',
-              background: '#F5A623',
+              background: 'var(--green)',
               animation: 'pendingPulse 1.1s ease-in-out infinite',
               flexShrink: 0,
             }}
           />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 12, color: '#F5A623', fontWeight: 600 }}>
+            <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
               Broadcasting to the network
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -52,7 +64,7 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               left: 0,
               right: 0,
               height: 2,
-              background: 'rgba(245,166,35,0.15)',
+              background: 'rgba(68,255,151,0.15)',
               overflow: 'hidden',
             }}
           >
@@ -60,7 +72,7 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               style={{
                 height: '100%',
                 width: '40%',
-                background: '#F5A623',
+                background: 'var(--green)',
                 animation: 'pendingSlide 1.6s ease-in-out infinite',
               }}
             />
@@ -79,16 +91,29 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
         >
           <div style={{ minWidth: 0 }}>
             <div
+              onClick={onCopyMarketId}
               style={{
-                fontSize: 'var(--fs-md)',
-                fontWeight: 700,
-                color: 'var(--text)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: marketIdCopied ? 'var(--green)' : '#ffffff',
                 overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                lineHeight: 1.3,
+                cursor: market?.id ? 'pointer' : 'default',
+                transition: 'color 0.2s',
               }}
+              title={
+                marketIdCopied
+                  ? 'Market ID copied'
+                  : market?.id
+                    ? `${displayTitle} — click to copy market ID`
+                    : displayTitle
+              }
             >
-              {stub.marketTicker}
+              {marketIdCopied ? '✓ Market ID copied' : displayTitle}
             </div>
             <div
               style={{
@@ -109,7 +134,7 @@ export function PendingPositionCard({ stub }: { stub: PendingPositionStub }) {
               fontWeight: 700,
               letterSpacing: 0.6,
               padding: '4px 10px',
-              borderRadius: 999,
+              borderRadius: 0,
               background: sideSoft,
               border: `1px solid ${sideBorder}`,
               color: sideColor,
@@ -202,7 +227,7 @@ function Shimmer({
       style={{
         width,
         height,
-        borderRadius: 4,
+        borderRadius: 0,
         background: tone === 'accent' ? 'rgba(238,255,0,0.10)' : 'rgba(255,255,255,0.06)',
         animation: 'pendingShimmer 1.4s ease-in-out infinite',
         animationDelay: `${delay}ms`,

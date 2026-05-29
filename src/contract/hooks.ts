@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -7,7 +7,7 @@ import {
   useAccount,
   useChainId,
 } from 'wagmi';
-import { parseGwei, getAddress } from 'viem';
+import { parseGwei, getAddress, type PublicClient, type TransactionReceipt } from 'viem';
 import { vaultAbi, erc20Abi } from './abi';
 import {
   recoverCreatePositionSigner,
@@ -18,9 +18,6 @@ import type { Offer } from '../api/types';
 
 const POLYGON_AMOY_CHAIN_ID = 80002;
 
-// Wallet gas estimation on Polygon Amoy is unreliable — it frequently
-// underestimates and causes replaced/dropped transactions. We override with
-// generous explicit values on testnet only; on mainnet we let the wallet estimate.
 const AMOY_GAS_OVERRIDES = {
   gas: 500_000n,
   maxPriorityFeePerGas: parseGwei('30'),
@@ -35,15 +32,70 @@ function useGasOverrides() {
 export const USDC_ADDRESS = ((import.meta.env.VITE_USDC_ADDRESS as string | undefined) ??
   '0xD477EDbe627E94639d7E92119Ca62a461c6ce555') as `0x${string}`;
 
+async function diagnoseRevert(
+  publicClient: PublicClient,
+  receipt: TransactionReceipt,
+  signatureExpirySec?: bigint,
+): Promise<Error> {
+  if (signatureExpirySec !== undefined) {
+    try {
+      const block = await publicClient.getBlock({ blockNumber: receipt.blockNumber });
+      if (block.timestamp > signatureExpirySec) {
+        return new Error('Quote expired before the transaction was mined. Refresh and try again.');
+      }
+    } catch {
+      // fall through to generic message
+    }
+  }
+  return new Error('Transaction reverted onchain.');
+}
+
+function useRevertError(
+  receipt: TransactionReceipt | undefined,
+  signatureExpirySec?: bigint,
+): Error | null {
+  const publicClient = usePublicClient();
+  const [revertError, setRevertError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!receipt || !publicClient) {
+      setRevertError(null);
+      return;
+    }
+    if (receipt.status !== 'reverted') {
+      setRevertError(null);
+      return;
+    }
+    let cancelled = false;
+    void diagnoseRevert(publicClient, receipt, signatureExpirySec).then((err) => {
+      if (!cancelled) setRevertError(err);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [receipt, publicClient, signatureExpirySec]);
+
+  return revertError;
+}
+
 export function useApproveUsdc() {
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const { writeContract, data: hash, isPending, error, reset: resetWrite } = useWriteContract();
+  const {
+    data: receipt,
+    isLoading: isConfirming,
+    isSuccess: receiptFetched,
+    error: receiptFetchError,
+  } = useWaitForTransactionReceipt({ hash, pollingInterval: 2_000 });
   const publicClient = usePublicClient();
   const { address: account } = useAccount();
   const gasOverrides = useGasOverrides();
-  const [simulateError, setSimulateError] = useState<string | null>(null);
+  const [simulateError, setSimulateError] = useState<unknown>(null);
+  const revertError = useRevertError(receipt);
+
+  const reset = () => {
+    setSimulateError(null);
+    resetWrite();
+  };
 
   const approve = async (vaultAddress: string, amount: bigint) => {
     setSimulateError(null);
@@ -57,16 +109,17 @@ export function useApproveUsdc() {
     try {
       await publicClient!.simulateContract({ ...params, account });
     } catch (e) {
-      setSimulateError(
-        e instanceof Error ? e.message : 'USDC approval simulation failed.',
-      );
+      setSimulateError(e);
       return;
     }
 
     writeContract({ ...params, ...gasOverrides });
   };
 
-  return { approve, hash, isPending, isConfirming, isSuccess, error, simulateError };
+  const isSuccess = receiptFetched && receipt?.status === 'success';
+  const receiptError = receiptFetchError ?? revertError;
+
+  return { approve, hash, isPending, isConfirming, isSuccess, error, receiptError, simulateError, reset };
 }
 
 export function useCheckAllowance(
@@ -86,31 +139,38 @@ export function useCheckAllowance(
 
 export function useCreatePosition() {
   const { writeContract, data: hash, isPending, error, reset: resetWrite } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess, isError: isReceiptError } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const {
+    data: receipt,
+    isLoading: isConfirming,
+    isSuccess: receiptFetched,
+    error: receiptFetchError,
+  } = useWaitForTransactionReceipt({ hash, pollingInterval: 2_000 });
   const publicClient = usePublicClient();
   const { address: account } = useAccount();
   const { data: contractInfo } = useContractInfo();
   const gasOverrides = useGasOverrides();
-  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<unknown>(null);
+  const [submittedExpiry, setSubmittedExpiry] = useState<bigint | undefined>(undefined);
+  const revertError = useRevertError(receipt, submittedExpiry);
 
   const reset = () => {
     setVerifyError(null);
+    setSubmittedExpiry(undefined);
     resetWrite();
   };
 
   const create = async (offer: Offer) => {
     setVerifyError(null);
+    setSubmittedExpiry(undefined);
 
     if (!account) {
-      setVerifyError('Wallet not connected.');
+      setVerifyError(new Error('Wallet not connected.'));
       return;
     }
 
     const expectedSigner = resolveExpectedSigner(contractInfo?.polygonSignerAddress);
     if (!expectedSigner) {
-      setVerifyError('Unable to verify offer: no signer address from /contract-info.');
+      setVerifyError(new Error('Unable to verify offer: no signer address from /contract-info.'));
       return;
     }
 
@@ -118,13 +178,15 @@ export function useCreatePosition() {
     try {
       recoveredSigner = await recoverCreatePositionSigner(offer, account);
     } catch {
-      setVerifyError('Failed to recover signer from offer signature.');
+      setVerifyError(new Error('Failed to recover signer from offer signature.'));
       return;
     }
 
     if (getAddress(recoveredSigner) !== expectedSigner) {
       setVerifyError(
-        `Offer signature mismatch. Expected ${expectedSigner}, recovered ${getAddress(recoveredSigner)}.`,
+        new Error(
+          `Offer signature mismatch. Expected ${expectedSigner}, recovered ${getAddress(recoveredSigner)}.`,
+        ),
       );
       return;
     }
@@ -143,6 +205,7 @@ export function useCreatePosition() {
         offer.originationFeeBps,
         offer.lifetimeFeeAprBps,
         offer.liquidationFeeBps,
+        BigInt(offer.expectedOpenTradingFeeUsdcUnits),
         offer.contractSignature as `0x${string}`,
         BigInt(offer.signatureExpiry),
       ] as const,
@@ -151,34 +214,72 @@ export function useCreatePosition() {
     try {
       await publicClient!.simulateContract({ ...params, account });
     } catch (e) {
-      setVerifyError(
-        e instanceof Error ? e.message : 'createPosition simulation failed.',
-      );
+      setVerifyError(e);
+      return;
+    }
+
+    setSubmittedExpiry(BigInt(offer.signatureExpiry));
+    writeContract({ ...params, ...gasOverrides });
+  };
+
+  const isSuccess = receiptFetched && receipt?.status === 'success';
+  const receiptError = receiptFetchError ?? revertError;
+  const isReceiptError = receiptError != null;
+
+  return {
+    create,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    isReceiptError,
+    receiptError,
+    error,
+    verifyError,
+    reset,
+  };
+}
+
+export function useRequestClose() {
+  const { writeContract, data: hash, isPending, error, reset: resetWrite } = useWriteContract();
+  const {
+    data: receipt,
+    isLoading: isConfirming,
+    isSuccess: receiptFetched,
+    error: receiptFetchError,
+  } = useWaitForTransactionReceipt({ hash, pollingInterval: 2_000 });
+  const publicClient = usePublicClient();
+  const { address: account } = useAccount();
+  const gasOverrides = useGasOverrides();
+  const [simulateError, setSimulateError] = useState<unknown>(null);
+  const revertError = useRevertError(receipt);
+
+  const reset = () => {
+    setSimulateError(null);
+    resetWrite();
+  };
+
+  const requestClose = async (vaultAddress: string, positionKey: string) => {
+    setSimulateError(null);
+    const params = {
+      address: vaultAddress as `0x${string}`,
+      abi: vaultAbi,
+      functionName: 'requestClose' as const,
+      args: [positionKey as `0x${string}`] as const,
+    };
+
+    try {
+      await publicClient!.simulateContract({ ...params, account });
+    } catch (e) {
+      setSimulateError(e);
       return;
     }
 
     writeContract({ ...params, ...gasOverrides });
   };
 
-  return { create, hash, isPending, isConfirming, isSuccess, isReceiptError, error, verifyError, reset };
-}
+  const isSuccess = receiptFetched && receipt?.status === 'success';
+  const receiptError = receiptFetchError ?? revertError;
 
-export function useRequestClose() {
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
-  const gasOverrides = useGasOverrides();
-
-  const requestClose = (vaultAddress: string, positionKey: string) => {
-    writeContract({
-      address: vaultAddress as `0x${string}`,
-      abi: vaultAbi,
-      functionName: 'requestClose',
-      args: [positionKey as `0x${string}`],
-      ...gasOverrides,
-    });
-  };
-
-  return { requestClose, hash, isPending, isConfirming, isSuccess, error };
+  return { requestClose, hash, isPending, isConfirming, isSuccess, error, receiptError, simulateError, reset };
 }

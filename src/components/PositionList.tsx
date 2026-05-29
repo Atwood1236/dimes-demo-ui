@@ -1,33 +1,30 @@
 import { useEffect, useState } from 'react'
+import type { Position } from '../api/types'
 import { isClosedPosition, isOpenPosition } from '../api/types'
 import { usePositions } from '../hooks/usePositions'
 import { usePendingPositionsStore } from '../store/pendingPositions'
+import { CardShell } from './CardShell'
 import { PendingPositionCard } from './PendingPositionCard'
 import { PositionCard } from './PositionCard'
+import { PositionDetailDrawer } from './PositionDetailDrawer'
 import { SettledCard } from './SettledCard'
 
 type Tab = 'active' | 'closed'
 
-type SortOption = 'newest' | 'oldest' | 'recently_closed'
-
-const sortConfig: Record<SortOption, { sortBy: string; sortDirection: string; label: string }> = {
-  newest: { sortBy: 'created_at', sortDirection: 'desc', label: 'Newest first' },
-  oldest: { sortBy: 'created_at', sortDirection: 'asc', label: 'Oldest first' },
-  recently_closed: { sortBy: 'closed_at', sortDirection: 'desc', label: 'Recently closed' },
+const gridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+  gap: 16,
 }
-
-const activeSortOptions: SortOption[] = ['newest', 'oldest']
-const closedSortOptions: SortOption[] = ['newest', 'oldest', 'recently_closed']
 
 export function PositionList() {
   const [tab, setTab] = useState<Tab>('active')
-  const [sort, setSort] = useState<SortOption>('newest')
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null)
 
-  const { sortBy, sortDirection } = sortConfig[sort]
   const apiState = tab === 'active' ? 'active' : 'inactive'
   const { data: positions, isLoading } = usePositions({
-    sortBy,
-    sortDirection,
+    sortBy: 'created_at',
+    sortDirection: 'desc',
     state: apiState,
     expand: ['unwinds'],
   })
@@ -50,35 +47,23 @@ export function PositionList() {
       ),
   )
 
-  const currentSortOptions = tab === 'active' ? activeSortOptions : closedSortOptions
-
   const handleTabChange = (newTab: Tab) => {
     setTab(newTab)
-    if (newTab === 'active' && sort === 'recently_closed') {
-      setSort('newest')
-    }
+    setSelectedPosition(null)
   }
 
-  const selectStyle: React.CSSProperties = {
-    background: 'var(--surface-subtle)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 6,
-    padding: '8px 12px',
-    fontSize: 13,
-    color: 'var(--text)',
-    outline: 'none',
-    cursor: 'pointer',
-    fontFamily: 'var(--font)',
-  }
+  const drawerOpen = selectedPosition !== null
+  const selectedUnwinds = selectedPosition
+    ? positions?.find((p) => p.id === selectedPosition.id)?.unwinds
+    : undefined
 
   return (
     <div style={{ padding: '24px 0' }}>
-      {/* Tabs + Sort */}
+      {/* Tabs */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
           marginBottom: 20,
         }}
       >
@@ -87,7 +72,7 @@ export function PositionList() {
             display: 'flex',
             gap: 4,
             background: 'var(--card)',
-            borderRadius: 8,
+            borderRadius: 0,
             padding: 4,
             width: 'fit-content',
           }}
@@ -98,7 +83,7 @@ export function PositionList() {
               onClick={() => handleTabChange(t)}
               style={{
                 padding: '8px 20px',
-                borderRadius: 6,
+                borderRadius: 0,
                 border: 'none',
                 background: tab === t ? 'var(--card-elevated)' : 'transparent',
                 color: tab === t ? 'var(--text)' : 'var(--text-dim)',
@@ -125,32 +110,20 @@ export function PositionList() {
             </button>
           ))}
         </div>
-
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortOption)}
-          style={selectStyle}
-        >
-          {currentSortOptions.map((opt) => (
-            <option key={opt} value={opt}>
-              {sortConfig[opt].label}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Loading */}
       {isLoading && (
-        <div style={{ padding: '32px 0', textAlign: 'center' }}>
-          <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>
-            Loading positions...
-          </span>
+        <div style={gridStyle} className="stat-grid">
+          {[0, 1, 2].map((i) => (
+            <PositionCardSkeleton key={i} delay={i * 80} />
+          ))}
         </div>
       )}
 
       {/* Active tab */}
       {!isLoading && tab === 'active' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }} className='stat-grid'>
+        <div style={gridStyle} className="stat-grid">
           {unmatchedStubs.map((stub) => (
             <PendingPositionCard key={stub.key} stub={stub} />
           ))}
@@ -165,8 +138,8 @@ export function PositionList() {
               <PositionCard
                 key={pos.id}
                 position={pos}
-                unwinds={pos.unwinds}
-                isUnwindsLoading={false}
+                onClick={() => setSelectedPosition(pos)}
+                isSelected={selectedPosition?.id === pos.id}
               />
             ))
           )}
@@ -175,7 +148,7 @@ export function PositionList() {
 
       {/* Closed tab */}
       {!isLoading && tab === 'closed' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }} className='stat-grid'>
+        <div style={gridStyle} className="stat-grid">
           {closedPositions.length === 0 ? (
             <div style={{ padding: '32px 0', textAlign: 'center', gridColumn: '1 / -1' }}>
               <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>
@@ -187,13 +160,66 @@ export function PositionList() {
               <SettledCard
                 key={pos.id}
                 position={pos}
-                unwinds={pos.unwinds}
-                isUnwindsLoading={false}
+                onClick={() => setSelectedPosition(pos)}
+                isSelected={selectedPosition?.id === pos.id}
               />
             ))
           )}
         </div>
       )}
+
+      {/* Detail drawer */}
+      <PositionDetailDrawer
+        position={selectedPosition}
+        unwinds={selectedUnwinds ?? undefined}
+        isUnwindsLoading={false}
+        open={drawerOpen}
+        onClose={() => setSelectedPosition(null)}
+      />
     </div>
+  )
+}
+
+function PositionCardSkeleton({ delay }: { delay: number }) {
+  const shimmer = (w: number, h: number, d: number, tone: 'dim' | 'accent' = 'dim') => ({
+    width: w,
+    height: h,
+    background: tone === 'accent' ? 'rgba(238,255,0,0.08)' : 'rgba(255,255,255,0.06)',
+    animation: 'posSkeletonPulse 1.4s ease-in-out infinite',
+    animationDelay: `${delay + d}ms`,
+  })
+
+  return (
+    <CardShell variant="yellow">
+      <div style={{ padding: '22px 24px 20px' }}>
+        {/* Header: title + badges */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={shimmer(160, 14, 0)} />
+            <div style={{ ...shimmer(100, 10, 60), marginTop: 6 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={shimmer(36, 20, 40, 'accent')} />
+            <div style={shimmer(48, 20, 80)} />
+          </div>
+        </div>
+
+        {/* Stats grid (2-col, mimics simple mode) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i}>
+              <div style={shimmer(50 + (i % 3) * 10, 8, i * 40)} />
+              <div style={{ ...shimmer(60 + (i % 4) * 14, 14, i * 40 + 60, 'accent'), marginTop: 6 }} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @keyframes posSkeletonPulse {
+          0%, 100% { opacity: 0.35; }
+          50% { opacity: 0.75; }
+        }
+      `}</style>
+    </CardShell>
   )
 }

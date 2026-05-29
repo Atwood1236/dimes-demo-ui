@@ -7,9 +7,30 @@ prediction markets API. Fork it, wire it to your own backend, and ship.
 
 - How to authenticate against the Dimes API
 - How to fetch markets and user positions
-- How to request a quote, approve USDC, and submit a leveraged position to
-  the on-chain vault, including EIP-712 signature verification
+- The **draft → promote** quoting flow: fetch a draft quote (no expiry
+  pressure), let the user review, then promote to a signed quote and
+  immediately open the wallet — hiding the 15s signature window entirely
+- Approve USDC and submit a leveraged position to the on-chain vault,
+  including EIP-712 signature verification
 - A minimal, themable UI intended as a starting point
+
+## Quote flow
+
+The UI uses a two-step quoting flow for better UX:
+
+1. **Draft** — `POST /v1/prediction-markets/draft-offers` returns pricing and
+   fees without a chain signature. No countdown, no expiry — the user reviews
+   at their own pace.
+2. **Promote** — when the user clicks "Create position",
+   `POST /v1/prediction-markets/promoted-offers/{draft_offer_id}` re-runs the
+   pipeline and returns a fully signed quote. The UI opens the wallet
+   immediately; the 15s signature window is never shown.
+3. **Market moved** — if promotion fails because conditions changed, the UI
+   auto-fetches a new draft, highlights what changed inline (entry price,
+   fees, total cost), and offers "Accept Changes" or "Cancel".
+
+See `src/hooks/useTradeMachine.ts` for the state machine and
+`src/api/offers.ts` for the API calls.
 
 ## Quickstart
 
@@ -33,6 +54,8 @@ All config is read from Vite environment variables. See
 | Variable                        | Default                                | Purpose                                                                                                                                                                            |
 |---------------------------------|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `VITE_API_URL`                  | `https://api-sandbox.dimes.fi`         | Dimes API base URL.                                                                                                                                                                |
+| `VITE_RELAYER_URL`              | _(unset)_                              | Optional base-URL override for the deposit-wallet relayer endpoint (`POST /v1/prediction-markets/relayer-submissions`) only. Leave empty to route through `VITE_API_URL`. Set only when the relayer is on a separate domain. |
+| `VITE_TOKEN_URL`                | _(unset)_                              | Optional base-URL override for the auth token endpoints (`POST /v1/prediction-markets/tokens` and `/demo-token`) only. Leave empty to route through `VITE_API_URL`. Set only when token minting is on a separate domain. |
 | `VITE_CHAIN_ID`                 | `137`                                  | `137` = Polygon mainnet, `80002` = Polygon Amoy testnet.                                                                                                                           |
 | `VITE_RPC_URL`                  | _(unset)_                              | Optional custom RPC endpoint; leave empty to use wagmi's default.                                                                                                                  |
 | `VITE_USDC_ADDRESS`             | _(sandbox mock)_                       | Collateral token the vault accepts. Defaults to the sandbox mock USDC so the demo works out of the box. See [Chains and contracts](#chains-and-contracts) for prod/testnet values. |
@@ -72,7 +95,7 @@ clear.
 | Path                | Contents                                                                                                    |
 |---------------------|-------------------------------------------------------------------------------------------------------------|
 | `src/api/`          | One file per resource. `client.ts` is the HTTP wrapper with JWT auth + 401 retry.                           |
-| `src/hooks/`        | React Query wrappers for each resource + `useAutoAuth` for token lifecycle.                                 |
+| `src/hooks/`        | `useTradeMachine` (draft→promote state machine), React Query wrappers, `useAutoAuth`.                       |
 | `src/contract/`     | Vault ABI, wagmi hooks for `approve`, `createPosition`, `requestClose`, and EIP-712 signature verification. |
 | `src/components/`   | UI, kept deliberately small and un-clever. `ui/` has shared primitives (`Button`, `Input`, `Field`).        |
 | `src/store/auth.ts` | Zustand store holding the active JWT.                                                                       |

@@ -1,13 +1,26 @@
-import { ApiError } from '../api/client';
 import { formatApiError } from '../api/error-messages';
+import { formatContractError } from '../contract/error-messages';
+
+function isApiError(err: unknown): err is { status: number; code: string; message: string } {
+  return err != null && typeof err === 'object' && 'status' in err && 'code' in err;
+}
 
 export function ErrorBanner({ error, onDismiss }: { error: unknown; onDismiss?: () => void }) {
   if (!error) return null;
 
-  const message = formatApiError(error);
-  const apiError = error instanceof ApiError ? error : null;
-  const code = apiError?.code;
+  const apiError = isApiError(error) ? error : null;
   const status = apiError?.status;
+
+  let message: string;
+  let code: string | undefined;
+  if (apiError) {
+    message = formatApiError(error);
+    code = apiError.code ?? undefined;
+  } else {
+    const formatted = formatContractError(error);
+    message = formatted.message;
+    code = formatted.code;
+  }
 
   return (
     <div
@@ -15,7 +28,7 @@ export function ErrorBanner({ error, onDismiss }: { error: unknown; onDismiss?: 
       style={{
         marginTop: 12,
         padding: '12px 14px',
-        borderRadius: 10,
+        borderRadius: 0,
         border: '1px solid rgba(224, 82, 82, 0.35)',
         background: 'linear-gradient(180deg, rgba(224, 82, 82, 0.08) 0%, rgba(224, 82, 82, 0.02) 100%)',
         display: 'flex',

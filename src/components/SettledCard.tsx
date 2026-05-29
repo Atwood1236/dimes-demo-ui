@@ -1,16 +1,9 @@
 import { useState } from 'react'
-import type { ClosedPosition, PositionUnwindList } from '../api/types'
+import type { ClosedPosition } from '../api/types'
+import { formatOpenedAtEt, formatDateTimeEt } from '../utils/format'
 import { CardShell } from './CardShell'
-import { StatRow } from './StatRow'
-import { LeverageChart } from './LeverageChart'
-import {
-  MicroStat,
-  PnlHero,
-  StatGroup,
-  ViewToggle,
-  fadeInKeyframes,
-  useViewMode,
-} from './CardViewParts'
+import { MicroStat, PnlHero } from './CardViewParts'
+import { PositionIdRow } from './PositionCard'
 
 const reasonLabels: Record<string, string> = {
   closed: 'Closed',
@@ -20,53 +13,24 @@ const reasonLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 }
 
-const FAILURE_COPY: Record<string, string> = {
-  price_exceeded_tolerance:
-    'Polymarket price moved or the order book thinned beyond your slippage tolerance before the order could fill. Your collateral was returned and no position was opened.',
-  expired:
-    'The Polymarket order expired before it could fill. Your collateral was returned and no position was opened.',
-  failed:
-    'The Polymarket order could not be executed. Your collateral was returned and no position was opened.',
-  kalshi_order_max_retries_exhausted:
-    'The Kalshi order failed after multiple retries. Your collateral was returned and no position was opened.',
-}
-
-const GENERIC_FAILURE_COPY =
-  'Your position could not be opened and your collateral was returned.'
-
-const BULL_RETRY_PREFIX = 'Bull job max retries: '
-
-function describeFailureReason(code: string | null | undefined): string {
-  if (!code) return GENERIC_FAILURE_COPY
-  if (FAILURE_COPY[code]) return FAILURE_COPY[code]
-  if (code.startsWith(BULL_RETRY_PREFIX)) {
-    const cause = code.slice(BULL_RETRY_PREFIX.length).trim()
-    if (cause) return `Execution failed after multiple retries: ${cause}.`
-  }
-  return GENERIC_FAILURE_COPY
-}
-
 export function SettledCard({
   position,
-  unwinds,
-  isUnwindsLoading = false,
+  onClick,
+  isSelected,
 }: {
   position: ClosedPosition
-  unwinds?: PositionUnwindList
-  isUnwindsLoading?: boolean
+  onClick?: () => void
+  isSelected?: boolean
 }) {
-  const unwindData = unwinds
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useViewMode('settledCard.viewMode')
+  const [collapsed, setCollapsed] = useState(false)
+  const displayTitle = position.marketTitle || position.marketTicker
 
   const copyToClipboard = (value: string, key: string) => {
     navigator.clipboard.writeText(value)
     setCopiedKey(key)
     setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500)
   }
-
-  const truncateMiddle = (value: string, head = 8, tail = 6) =>
-    value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${value.slice(-tail)}`
 
   const realizedPnl = parseFloat(position.result.realizedPnlUsd)
   const pnlColor = realizedPnl >= 0 ? 'var(--green)' : 'var(--red)'
@@ -77,21 +41,19 @@ export function SettledCard({
   const reason = reasonLabels[position.closeReason] || position.closeReason
   const isLiquidated = position.closeReason === 'liquidated'
   const isReverted = position.closeReason === 'reverted'
-  const isCancelled = position.closeReason === 'cancelled'
-  const rawFailureCode = position.failure?.reason ?? null
-  const showFailureExplanation =
-    (isReverted || (isCancelled && !!rawFailureCode))
-  const failureExplanation = showFailureExplanation
-    ? describeFailureReason(rawFailureCode)
-    : null
-  const isUnknownFailure =
-    showFailureExplanation &&
-    !!rawFailureCode &&
-    !FAILURE_COPY[rawFailureCode] &&
-    !rawFailureCode.startsWith(BULL_RETRY_PREFIX)
+
+  const filledPrice = position.entry.effectiveEntryPriceUsd
+  const entryNotional = parseFloat(position.entry.notionalUsd)
+
+  const openedAtEt = formatOpenedAtEt(position.entry.openedAt)
+  const closedAtEt = formatDateTimeEt(position.result.closedAt)
 
   return (
-    <CardShell variant="settled">
+    <CardShell
+      variant="settled"
+      onClick={onClick}
+      style={isSelected ? { border: '1px solid var(--yellow-border)' } : undefined}
+    >
       <div style={{ position: 'relative', zIndex: 1, padding: '22px 24px 20px' }}>
         {/* Header */}
         <div
@@ -104,55 +66,70 @@ export function SettledCard({
           }}
         >
           <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+            {(openedAtEt || closedAtEt) && (
+              <div style={{ marginBottom: 4 }}>
+                {openedAtEt && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      letterSpacing: 0.2,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                    title="Position opened (America/New_York)"
+                  >
+                    Opened {openedAtEt}
+                  </div>
+                )}
+                {closedAtEt && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      letterSpacing: 0.2,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                    title="Position closed (America/New_York)"
+                  >
+                    Closed {closedAtEt}
+                  </div>
+                )}
+              </div>
+            )}
             <div
-              onClick={() => copyToClipboard(position.marketTicker, 'ticker')}
+              onClick={(e) => {
+                e.stopPropagation()
+                copyToClipboard(position.marketTicker, 'marketTicker')
+              }}
               style={{
-                fontSize: 16,
-                fontWeight: 700,
-                color: copiedKey === 'ticker' ? 'var(--green)' : 'var(--text)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: copiedKey === 'marketTicker' ? 'var(--green)' : '#ffffff',
                 overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
                 cursor: 'pointer',
                 transition: 'color 0.2s',
+                lineHeight: 1.3,
               }}
-              title={copiedKey === 'ticker' ? 'Copied!' : position.marketTicker}
+              title={
+                copiedKey === 'marketTicker'
+                  ? 'Ticker copied'
+                  : `${displayTitle} — click to copy ticker`
+              }
             >
-              {copiedKey === 'ticker' ? '✓ Copied to clipboard' : position.marketTicker}
+              {copiedKey === 'marketTicker' ? '✓ Ticker copied' : displayTitle}
             </div>
-            <span
-              onClick={() => copyToClipboard(position.id, 'id')}
-              style={{
-                display: 'block',
-                fontSize: 10,
-                fontWeight: 500,
-                color: copiedKey === 'id' ? 'var(--green)' : 'var(--text-dim)',
-                fontFamily: 'monospace',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'color 0.2s',
+            <PositionIdRow
+              positionId={position.id}
+              copied={copiedKey === 'positionId'}
+              onCopy={(e) => {
+                e.stopPropagation()
+                copyToClipboard(position.id, 'positionId')
               }}
-              title={copiedKey === 'id' ? 'Copied!' : position.id}
-            >
-              {copiedKey === 'id' ? '✓ Copied to clipboard' : truncateMiddle(position.id)}
-            </span>
-            <span
-              onClick={() => copyToClipboard(position.onChainPositionKey, 'key')}
-              style={{
-                display: 'block',
-                fontSize: 10,
-                fontWeight: 500,
-                color: copiedKey === 'key' ? 'var(--green)' : 'var(--text-dim)',
-                fontFamily: 'monospace',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                marginTop: 2,
-                transition: 'color 0.2s',
-              }}
-              title={copiedKey === 'key' ? 'Copied!' : position.onChainPositionKey}
-            >
-              {copiedKey === 'key' ? '✓ Copied to clipboard' : truncateMiddle(position.onChainPositionKey)}
-            </span>
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <span
@@ -168,49 +145,65 @@ export function SettledCard({
                     ? 'rgba(224,82,82,0.2)'
                     : 'var(--border)'
                 }`,
-                borderRadius: 4,
+                borderRadius: 0,
                 padding: '2px 8px',
                 textTransform: 'uppercase',
               }}
             >
               {reason}
             </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setCollapsed((c) => !c)
+              }}
+              aria-label={collapsed ? 'Expand card' : 'Collapse card'}
+              aria-expanded={!collapsed}
+              title={collapsed ? 'Expand' : 'Collapse'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 22,
+                height: 22,
+                padding: 0,
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 0,
+                color: 'var(--text-dim)',
+                cursor: 'pointer',
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transform: collapsed ? 'rotate(-90deg)' : 'none',
+                  transition: 'transform 0.18s ease',
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
           </div>
         </div>
 
-        {failureExplanation && (
-          <div
-            title={isUnknownFailure && rawFailureCode ? rawFailureCode : undefined}
-            style={{
-              fontSize: 12,
-              lineHeight: 1.4,
-              color: 'var(--text)',
-              background: 'var(--surface-subtle)',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              padding: '8px 10px',
-              marginBottom: 14,
-            }}
-          >
-            {failureExplanation}
-          </div>
-        )}
-
-        <ViewToggle
-          mode={viewMode}
-          onChange={setViewMode}
-          accent="var(--text-dim)"
-          accentInk="var(--bg)"
-        />
-
-        {viewMode === 'simple' ? (
-          <div style={{ animation: 'fadeIn 0.2s ease' }}>
+        {!collapsed && (
+          <>
             <PnlHero
               label="Realized PnL"
               value={`${pnlPrefix}$${Math.abs(realizedPnl).toFixed(2)}`}
               pctValue={`${pnlPrefix}${roePct.toFixed(1)}%`}
               color={pnlColor}
             />
+
             <div
               style={{
                 display: 'grid',
@@ -220,79 +213,39 @@ export function SettledCard({
             >
               <MicroStat label="Entry price" value={`$${position.entry.priceUsd}`} />
               <MicroStat
+                label="Filled price"
+                value={filledPrice ? `$${filledPrice}` : '—'}
+                valueColor={filledPrice ? undefined : 'var(--text-muted)'}
+              />
+              <MicroStat
+                label="Entry collateral"
+                value={`$${entryCollateral.toFixed(2)}`}
+              />
+              <MicroStat
+                label="Entry notional"
+                value={`$${entryNotional.toFixed(2)}`}
+              />
+              <MicroStat
                 label="Proceeds"
                 value={`$${position.result.proceedsUsd}`}
                 valueColor={pnlColor}
               />
+              <MicroStat
+                label="Origination fee"
+                value={`$${parseFloat(position.fees.originationFeeUsd).toFixed(2)}`}
+              />
               <MicroStat label="Total fees" value={`$${position.fees.totalFeesUsd}`} />
+              <MicroStat
+                label="Entry leverage"
+                value={`${(position.entry.leverageBps / 10000).toFixed(1)}x`}
+              />
               <MicroStat
                 label="Effective leverage"
                 value={`${(position.effectiveLeverageBps / 10000).toFixed(1)}x`}
               />
             </div>
-          </div>
-        ) : (
-          <div style={{ animation: 'fadeIn 0.2s ease' }}>
-            <StatGroup
-              label="Pricing"
-              accent="rgba(255,255,255,0.08)"
-              accentText="var(--text-dim)"
-            >
-              <StatRow label="Entry Price" value={`$${position.entry.priceUsd}`} />
-            </StatGroup>
-
-            <StatGroup
-              label="Result"
-              accent="rgba(255,255,255,0.08)"
-              accentText="var(--text-dim)"
-            >
-              <StatRow
-                label="Realized PnL / ROE"
-                value={`${pnlPrefix}$${Math.abs(realizedPnl).toFixed(2)} (${pnlPrefix}${roePct.toFixed(1)}%)`}
-                valueColor={pnlColor}
-              />
-              <StatRow
-                label="Proceeds"
-                value={`$${position.result.proceedsUsd}`}
-                valueColor={pnlColor}
-              />
-              <StatRow label="Total Fees" value={`$${position.fees.totalFeesUsd}`} />
-              <StatRow
-                label="Origination Fee"
-                value={`$${position.fees.originationFeeUsd}`}
-              />
-              <StatRow
-                label="Lifetime Fee"
-                value={`$${position.fees.totalLifetimeFeeUsd}`}
-              />
-            </StatGroup>
-
-            <StatGroup
-              label="Leverage"
-              accent="rgba(255,255,255,0.08)"
-              accentText="var(--text-dim)"
-              last
-            >
-              <StatRow
-                label="Starting"
-                value={`${(position.entry.leverageBps / 10000).toFixed(1)}x`}
-              />
-              <StatRow
-                label="Effective"
-                value={`${(position.effectiveLeverageBps / 10000).toFixed(1)}x`}
-              />
-              <div style={{ marginTop: 10 }}>
-                <LeverageChart
-                  unwinds={unwindData}
-                  isLoading={isUnwindsLoading}
-                  endAt={position.result.closedAt ? new Date(position.result.closedAt) : undefined}
-                />
-              </div>
-            </StatGroup>
-          </div>
+          </>
         )}
-
-        <style>{fadeInKeyframes}</style>
       </div>
     </CardShell>
   )

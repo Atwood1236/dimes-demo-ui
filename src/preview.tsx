@@ -9,22 +9,41 @@ import { SettledCard } from './components/SettledCard'
 import { QuoteDetails } from './components/QuoteDetails'
 import type { Market, Offer, OpenPosition, ClosedPosition } from './api/types'
 
+const mockPerNotional = {
+  at100UsdBps: 100000,
+  at500UsdBps: 80000,
+  at1000UsdBps: 60000,
+  at10000UsdBps: 30000,
+}
+
+const mockOpenSidedEligibility = {
+  yes: { acceptingNewPositions: true, rejectionReasonCode: null },
+  no: { acceptingNewPositions: true, rejectionReasonCode: null },
+}
+
 const mockMarket: Market = {
   id: 'dm_mkt_1',
   ticker: 'BTC-100K-JUN',
   title: 'Will Bitcoin reach $100k by June 2026?',
-  yesSubTitle: null,
+  yesSubTitle: undefined,
   category: 'crypto',
-  status: 'open',
+  status: 'active',
   provider: 'polymarket',
   acceptingNewPositions: true,
-  rejectionReasonCode: null,
+  sidedEligibility: mockOpenSidedEligibility,
   closeTime: '2026-06-30T00:00:00Z',
   latestEnterAt: '2026-06-29T00:00:00Z',
   tags: ['crypto'],
   minNotionalUsd: '5.00',
   minNotionalUsdPips: '50000',
-  leverage: { minBps: 10000, maxBps: 50000, stepBps: 5000 },
+  leverage: {
+    minBps: 10000,
+    maxBps: 50000,
+    maxYesBps: 50000,
+    maxNoBps: 50000,
+    stepBps: 5000,
+    maxMarketLeveragePerNotional: { yes: mockPerNotional, no: mockPerNotional },
+  },
   fees: {
     lifetimeAprBps: 500,
     liquidationBps: 200,
@@ -38,8 +57,15 @@ const mockMarket2: Market = {
   ticker: 'ETH-MERGE-V2',
   title: 'Will Ethereum implement sharding by Q4?',
   category: 'crypto',
-  status: 'open',
-  leverage: { minBps: 10000, maxBps: 80000, stepBps: 10000 },
+  status: 'active',
+  leverage: {
+    minBps: 10000,
+    maxBps: 60000,
+    maxYesBps: 80000,
+    maxNoBps: 60000,
+    stepBps: 10000,
+    maxMarketLeveragePerNotional: { yes: mockPerNotional, no: mockPerNotional },
+  },
 }
 
 const mockMarket3: Market = {
@@ -48,8 +74,15 @@ const mockMarket3: Market = {
   ticker: 'US-ELECTION-2028',
   title: 'Will the Democratic candidate win the 2028 US Presidential Election?',
   category: 'politics',
-  status: 'open',
-  leverage: { minBps: 10000, maxBps: 100000, stepBps: 10000 },
+  status: 'active',
+  leverage: {
+    minBps: 10000,
+    maxBps: 100000,
+    maxYesBps: 100000,
+    maxNoBps: 100000,
+    stepBps: 10000,
+    maxMarketLeveragePerNotional: { yes: mockPerNotional, no: mockPerNotional },
+  },
 }
 
 const mockOffer: Offer = {
@@ -65,6 +98,7 @@ const mockOffer: Offer = {
   evmChainId: '137',
   expectedOpenTradingFeeUsd: '0.02',
   expectedOpenTradingFeeUsdPips: '200',
+  expectedOpenTradingFeeUsdcUnits: '20000',
   expiresAt: new Date(Date.now() + 300000).toISOString(),
   leverageBps: 50000,
   lifetimeFeeAprBps: 500,
@@ -118,12 +152,18 @@ const mockOpenPosition: OpenPosition = {
     notionalUsdPips: '500000',
     openedAt: '2026-03-20T10:00:00Z',
     originationFeeBps: 100,
+    protocolOriginationFeeBps: 80,
+    partnerOriginationFeeBps: 20,
     originationFeeUsd: '0.50',
     originationFeeUsdPips: '5000',
     priceUsd: '0.33',
     priceUsdPips: '3300',
+    effectiveEntryPriceUsd: '0.3317',
+    effectiveEntryPriceUsdPips: '3317',
+    effectiveSlippageBps: 51,
   },
   current: {
+    bookLeverageBps: 42000,
     collateralUsd: '10.00',
     collateralUsdPips: '100000',
     effectiveCollateralUsd: '9.50',
@@ -139,6 +179,9 @@ const mockOpenPosition: OpenPosition = {
     unrealizedPnlBps: 1720,
     unrealizedPnlUsd: '7.58',
     unrealizedPnlUsdPips: '75800',
+    netUnrealizedPnlBps: 1620,
+    netUnrealizedPnlUsd: '7.45',
+    netUnrealizedPnlUsdPips: '74500',
   },
   risk: {
     currentLiquidationPriceUsd: '0.22',
@@ -152,14 +195,56 @@ const mockOpenPosition: OpenPosition = {
   fees: {
     accruedLifetimeFeeUsd: '0.12',
     accruedLifetimeFeeUsdPips: '1200',
+    accruedVenueFeeUsd: '0.02',
+    accruedVenueFeeUsdPips: '200',
     lifetimeAprBps: 500,
     pendingLifetimeFeeUsd: '0.01',
     pendingLifetimeFeeUsdPips: '100',
+    totalFeesUsd: '0.65',
+    totalFeesUsdPips: '6500',
   },
   timing: {
     marketCloseTime: '2026-06-30T00:00:00Z',
     marketStatus: 'active',
     timeToCloseMinutes: 138240,
+    isVoided: false,
+    isSettlementPending: false,
+  },
+}
+
+const mockUnwindingPosition: OpenPosition = {
+  ...mockOpenPosition,
+  id: 'dm_pos_unwind',
+  status: 'unwinding',
+  current: {
+    ...mockOpenPosition.current,
+    leverageBps: 48000,
+    unrealizedPnlUsd: '-2.10',
+    unrealizedPnlBps: -420,
+    positionValueUsd: '7.90',
+    positionValueUsdPips: '79000',
+  },
+}
+
+const mockVoidedPosition: OpenPosition = {
+  ...mockOpenPosition,
+  id: 'dm_pos_voided',
+  status: 'settling',
+  current: {
+    ...mockOpenPosition.current,
+    markPriceUsd: '0.50',
+    markPriceUsdPips: '5000',
+    unrealizedPnlUsd: '-1.80',
+    unrealizedPnlBps: -360,
+    positionValueUsd: '8.20',
+    positionValueUsdPips: '82000',
+  },
+  timing: {
+    ...mockOpenPosition.timing,
+    marketStatus: 'closed',
+    timeToCloseMinutes: undefined,
+    isVoided: true,
+    isSettlementPending: true,
   },
 }
 
@@ -180,21 +265,30 @@ const mockClosedPosition: ClosedPosition = {
     notionalUsdPips: '1000000',
     openedAt: '2026-03-10T10:00:00Z',
     originationFeeBps: 100,
+    protocolOriginationFeeBps: 80,
+    partnerOriginationFeeBps: 20,
     originationFeeUsd: '1.00',
     originationFeeUsdPips: '10000',
     priceUsd: '0.52',
     priceUsdPips: '5200',
+    effectiveEntryPriceUsd: '0.5189',
+    effectiveEntryPriceUsdPips: '5189',
+    effectiveSlippageBps: -21,
   },
   closeReason: 'settled',
   fees: {
     lifetimeAprBps: 500,
     originationFeeBps: 100,
+    protocolOriginationFeeBps: 80,
+    partnerOriginationFeeBps: 20,
     originationFeeUsd: '1.00',
     originationFeeUsdPips: '10000',
     totalFeesUsd: '3.87',
     totalFeesUsdPips: '38700',
     totalLifetimeFeeUsd: '2.87',
     totalLifetimeFeeUsdPips: '28700',
+    totalVenueFeeUsd: '0.00',
+    totalVenueFeeUsdPips: '0',
   },
   result: {
     closedAt: '2026-03-24T14:00:00Z',
@@ -206,6 +300,9 @@ const mockClosedPosition: ClosedPosition = {
     proceedsUsdPips: '897200',
     realizedPnlUsd: '64.72',
     realizedPnlUsdPips: '647200',
+    netRealizedPnlBps: 2589,
+    netRealizedPnlUsd: '64.72',
+    netRealizedPnlUsdPips: '647200',
   },
 }
 
@@ -250,6 +347,18 @@ export default function Preview() {
         <h2 style={{ fontSize: 14, fontWeight: 600, color: '#e8e8e8', marginBottom: 12 }}>Active Position</h2>
         <div style={{ maxWidth: 480, marginBottom: 40 }}>
           <PositionCard position={mockOpenPosition} />
+        </div>
+
+        {/* Unwinding Position */}
+        <h2 style={{ fontSize: 14, fontWeight: 600, color: '#e8e8e8', marginBottom: 12 }}>Unwinding Position</h2>
+        <div style={{ maxWidth: 480, marginBottom: 40 }}>
+          <PositionCard position={mockUnwindingPosition} />
+        </div>
+
+        {/* Voided Position */}
+        <h2 style={{ fontSize: 14, fontWeight: 600, color: '#e8e8e8', marginBottom: 12 }}>Voided Position</h2>
+        <div style={{ maxWidth: 480, marginBottom: 40 }}>
+          <PositionCard position={mockVoidedPosition} />
         </div>
 
         {/* Settled Position */}

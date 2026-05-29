@@ -1,4 +1,5 @@
 import type { Market } from '../api/types'
+import { leverageMaxBps } from '../api/types'
 import { CardShell } from './CardShell'
 
 export function MarketCard({
@@ -8,7 +9,8 @@ export function MarketCard({
   market: Market
   onSelect: (market: Market) => void
 }) {
-  const maxLeverage = (market.leverage.maxBps / 10000).toFixed(0)
+  const maxLeverageYes = (leverageMaxBps(market.leverage, 'yes') / 10000).toFixed(0)
+  const maxLeverageNo = (leverageMaxBps(market.leverage, 'no') / 10000).toFixed(0)
 
   return (
     <CardShell variant="yellow" onClick={() => onSelect(market)}>
@@ -45,7 +47,7 @@ export function MarketCard({
                   ? 'rgba(68,255,151,0.2)'
                   : 'var(--border)'
               }`,
-              borderRadius: 4,
+              borderRadius: 0,
               padding: '2px 8px',
               textTransform: 'uppercase',
             }}
@@ -77,7 +79,7 @@ export function MarketCard({
             fontSize: 11,
             color: 'var(--text-muted)',
             background: 'var(--surface-subtle)',
-            borderRadius: 4,
+            borderRadius: 0,
             padding: '2px 8px',
             marginBottom: 12,
           }}
@@ -101,7 +103,7 @@ export function MarketCard({
             Max Leverage
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--yellow)' }}>
-            Up to {maxLeverage}x
+            {maxLeverageYes}x YES / {maxLeverageNo}x NO
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
